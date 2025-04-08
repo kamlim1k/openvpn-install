@@ -664,6 +664,21 @@ function installQuestions() {
 		done
 	fi
 	echo ""
+	echo "Do you want to generate a client certificate and configuration?"
+	echo "   1) Yes"
+	echo "   2) No"
+	until [[ $GENERATE_CLIENT =~ ^[1-2]$ ]]; do
+		read -rp "Generate client [1-2]: " -e -i 1 GENERATE_CLIENT
+	done
+	case $GENERATE_CLIENT in
+	1)
+		GENERATE_CLIENT="y"
+		;;
+	2)
+		GENERATE_CLIENT="n"
+		;;
+	esac
+	echo ""
 	echo "Okay, that was all I needed. We are ready to setup your OpenVPN server now."
 	echo "You will be able to generate a client at the end of the installation."
 	APPROVE_INSTALL=${APPROVE_INSTALL:-n}
@@ -684,9 +699,12 @@ function installOpenVPN() {
 		DNS=${DNS:-1}
 		COMPRESSION_ENABLED=${COMPRESSION_ENABLED:-n}
 		CUSTOMIZE_ENC=${CUSTOMIZE_ENC:-n}
-		CLIENT=${CLIENT:-client}
+		CLIENT=${CLIENT:-}
 		PASS=${PASS:-1}
 		CONTINUE=${CONTINUE:-y}
+		DOMAIN=${DOMAIN:-}
+		TUNNEL_CIDR_BLOCKS=${TUNNEL_CIDR_BLOCKS:-()}
+		GENERATE_CLIENT=${GENERATE_CLIENT:-n}
 
 		if [[ -z $ENDPOINT ]]; then
 			ENDPOINT=$(resolvePublicIP)
@@ -914,6 +932,11 @@ ifconfig-pool-persist ipp.txt" >>/etc/openvpn/server.conf
 		;;
 	esac
 
+	# Push domain if specified
+	if [[ $DOMAIN != "" ]]; then
+		echo "push \"dhcp-option DOMAIN $DOMAIN\"" >>/etc/openvpn/server.conf
+	fi
+
 	# Allow split-tunnel via custom CIDR blocks (ie. 192.168.0.0/24)
 	if [ ${#TUNNEL_CIDR_BLOCKS[@]} -gt 0 ]; then
 		for cidr in ${TUNNEL_CIDR_BLOCKS[@]}; do
@@ -1128,8 +1151,10 @@ verb 3" >>/etc/openvpn/client-template.txt
 		echo "compress $COMPRESSION_ALG" >>/etc/openvpn/client-template.txt
 	fi
 
-	# Generate the custom client.ovpn
-	newClient
+	# Generate the custom client.ovpn if requested
+	if [[ $GENERATE_CLIENT == "y" ]]; then
+		newClient
+	fi
 	echo "If you want to add more clients, you simply need to run this script another time!"
 }
 
